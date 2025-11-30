@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/vision_service.dart';
 import '../services/gemini_service.dart';
+import '../services/local_storage_service.dart';
+import '../models/prescription_history.dart';
 import 'results_screen.dart';
+import '../utils/helpers.dart';
 
 class PrescriptionScanner extends StatefulWidget {
   const PrescriptionScanner({super.key});
@@ -14,18 +17,24 @@ class PrescriptionScanner extends StatefulWidget {
 
 class _PrescriptionScannerState extends State<PrescriptionScanner> {
   final ImagePicker _picker = ImagePicker();
-  File? _selectedImage;
-  bool _isProcessing = false;
   final VisionService _visionService = VisionService();
   final GeminiService _geminiService = GeminiService();
+  final LocalStorageService _storageService = LocalStorageService();
+  
+  File? _selectedImage;
+  bool _isProcessing = false;
 
   Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
-    if (image != null) {
-      setState(() {
-        _selectedImage = File(image.path);
-      });
-      _processImage();
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+        _processImage();
+      }
+    } catch (e) {
+      _showError('Failed to pick image: $e');
     }
   }
 
@@ -37,13 +46,25 @@ class _PrescriptionScannerState extends State<PrescriptionScanner> {
     });
 
     try {
-      // Step 1: Extract text using Google Vision AI
+      // Step 1: Extract text using our service
       final String extractedText = await _visionService.extractTextFromImage(_selectedImage!);
       
       // Step 2: Use Gemini to structure and explain the prescription
       final String analyzedText = await _geminiService.analyzePrescription(extractedText);
       
-      // Navigate to results screen
+      // Step 3: Save to history
+      final prescription = PrescriptionHistory(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: _generateTitle(extractedText),
+        scanDate: DateTime.now(),
+        extractedText: extractedText,
+        analyzedText: analyzedText,
+        imagePath: _selectedImage!.path,
+      );
+      
+      await _storageService.savePrescription(prescription);
+      
+      // Step 4: Navigate to results
       if (!mounted) return;
       Navigator.push(
         context,
@@ -57,14 +78,34 @@ class _PrescriptionScannerState extends State<PrescriptionScanner> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error processing image: $e')),
-      );
+      _showError('Error processing image: $e');
     } finally {
-      setState(() {
-        _isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
+  }
+
+  String _generateTitle(String extractedText) {
+    final lines = extractedText.split('\n');
+    for (final line in lines) {
+      if (line.trim().isNotEmpty && line.length > 5) {
+        return 'Prescription: ${Helpers.truncateText(line.trim(), maxLength: 30)}';
+      }
+    }
+    return 'Prescription ${Helpers.formatDate(DateTime.now())}';
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -88,12 +129,12 @@ class _PrescriptionScannerState extends State<PrescriptionScanner> {
                     Icon(Icons.photo_camera, size: 40, color: Colors.green),
                     SizedBox(height: 10),
                     Text(
-                      'Take a clear photo of your prescription',
+                      'Upload Prescription Image',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 5),
                     Text(
-                      'Ensure good lighting and focus on the text',
+                      'Select a clear image of your prescription from gallery',
                       style: TextStyle(fontSize: 14, color: Colors.grey),
                       textAlign: TextAlign.center,
                     ),
@@ -108,13 +149,13 @@ class _PrescriptionScannerState extends State<PrescriptionScanner> {
               child: _selectedImage == null
                   ? Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
+                        border: Border.all(color: Colors.grey.shade300),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.camera_alt, size: 60, color: Colors.grey),
+                          Icon(Icons.photo_library, size: 60, color: Colors.grey),
                           SizedBox(height: 10),
                           Text('No image selected'),
                         ],
@@ -129,12 +170,18 @@ class _PrescriptionScannerState extends State<PrescriptionScanner> {
             
             // Action Button
             if (_isProcessing)
-              const CircularProgressIndicator()
+              const Column(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 10),
+                  Text('Processing image...'),
+                ],
+              )
             else
               ElevatedButton.icon(
                 onPressed: _pickImage,
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Take Photo of Prescription'),
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Select from Gallery'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,

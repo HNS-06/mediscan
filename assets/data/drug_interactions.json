@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "generated": "2025-11-30",
+  "interactions": [
+    {
+      "drugs": ["Aspirin", "Warfarin"],
+      "risk": "High",
+      "advice": "Increased risk of bleeding. Consult your physician before combining."
+    },
+    {
+      "drugs": ["Metformin", "Contrast Dye"],
+      "risk": "Medium",
+      "advice": "Temporary risk to kidney function; hydrate and consult provider."
+    },
+    {
+      "drugs": ["Ibuprofen", "Lisinopril"],
+      "risk": "Low",
+      "advice": "May reduce effectiveness of blood pressure medication."
+    }
+  ]
+}

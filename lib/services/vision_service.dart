@@ -2,6 +2,12 @@ import 'dart:io';
 import 'package:google_ml_kit/google_ml_kit.dart';
 
 class VisionService {
+  // The current project depends on `google_ml_kit` which exposes
+  // `textRecognizer()` but that API is flagged deprecated by the
+  // analyzer. Keep using it for now and suppress the deprecation
+  // warning until a migration to the newer `google_mlkit_text_recognition`
+  // package is completed.
+  // ignore: deprecated_member_use
   final TextRecognizer _textRecognizer = GoogleMlKit.vision.textRecognizer();
 
   Future<String> extractTextFromImage(File imageFile) async {
